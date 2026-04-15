@@ -4,6 +4,68 @@
   <title>Larp Bin</title>
 </head>
 <body>
-  <h1>Larp Bin is working 🚀</h1>
+  <h1>Larp Bin Feed</h1>
+
+  <input id="user" placeholder="username">
+  <input id="pass" placeholder="password">
+  <button onclick="register()">Register</button>
+  <button onclick="login()">Login</button>
+
+  <br><br>
+
+  <input id="postText" placeholder="write post">
+  <button onclick="post()">Post</button>
+
+  <div id="feed"></div>
+
+<script>
+async function register(){
+  await fetch("/api/register", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({
+      username: user.value,
+      password: pass.value
+    })
+  });
+}
+
+async function login(){
+  await fetch("/api/login", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({
+      username: user.value,
+      password: pass.value
+    })
+  });
+  loadPosts();
+}
+
+async function post(){
+  await fetch("/api/post", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({
+      username: user.value,
+      text: postText.value
+    })
+  });
+  loadPosts();
+}
+
+async function loadPosts(){
+  let res = await fetch("/api/posts");
+  let data = await res.json();
+
+  feed.innerHTML = "";
+  data.forEach(p => {
+    feed.innerHTML += `<p><b>${p.username}</b>: ${p.text}</p>`;
+  });
+}
+
+loadPosts();
+</script>
+
 </body>
 </html>
