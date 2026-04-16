@@ -1,98 +1,224 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Larp Chat</title>
-<script src="/socket.io/socket.io.js"></script>
+<title>LARP BIN</title>
 
 <style>
-body { margin:0; display:flex; background:#0a0a0f; color:white; font-family:Arial; }
+body { margin:0; background:#050505; color:#0f0; font-family:monospace; }
 
-/* SIDEBAR */
-.sidebar { width:200px; background:#111; padding:10px; }
-.user { cursor:pointer; padding:5px; }
-.online { color:lime; }
+/* SCREEN 1 */
+#start {
+  display:flex;
+  height:100vh;
+  justify-content:center;
+  align-items:center;
+  flex-direction:column;
+}
 
-/* CHAT */
-.chat { flex:1; display:flex; flex-direction:column; }
-.messages { flex:1; padding:10px; }
-.typing { font-size:12px; color:gray; }
+button {
+  background:black;
+  color:#0f0;
+  border:1px solid #0f0;
+  padding:10px;
+  cursor:pointer;
+}
+
+/* MAIN GRID */
+#main { display:none; padding:20px; }
+
+.grid {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:20px;
+}
+
+.box {
+  border:1px solid #0f0;
+  padding:10px;
+  height:300px;
+  overflow:auto;
+}
+
 </style>
 </head>
 
 <body>
 
-<div class="sidebar">
-  <h3>Users</h3>
-  <div id="users"></div>
+<!-- START SCREEN -->
+<div id="start">
+  <h1>LARP BIN</h1>
+  <button onclick="enter()">CONTINUE</button>
 </div>
 
-<div class="chat">
-  <div class="messages" id="messages"></div>
+<!-- MAIN -->
+<div id="main">
 
-  <div class="typing" id="typing"></div>
+<button onclick="codeLogin()">Login With Code</button>
 
-  <input id="msgBox" placeholder="message">
+<div class="grid">
+
+<!-- ANNOUNCEMENTS -->
+<div class="box">
+  <h3>Announcements</h3>
+  <textarea id="annText"></textarea><br>
+  <input id="annImg" placeholder="img url"><br>
+  <button onclick="postAnn()">Post</button>
+  <div id="annList"></div>
+</div>
+
+<!-- POSTS -->
+<div class="box">
+  <h3>Posts</h3>
+
+  <input id="search" placeholder="search">
+  <button onclick="search()">Search</button>
+
+  <div id="posts"></div>
+
+  <h4>Create Post</h4>
+  <input id="title" placeholder="title"><br>
+  <textarea id="t1"></textarea><br>
+  <textarea id="t2"></textarea><br>
+  <textarea id="t3"></textarea><br>
+  <input id="img" placeholder="img url"><br>
+
+  <button onclick="createPost()">POST</button>
+</div>
+
+</div>
+
 </div>
 
 <script>
-let socket = io();
-let currentUser = "";
-let currentChat = "";
+let user = "guest";
+let role = "user";
 
-/* LOGIN QUICK */
-let name = prompt("Enter username");
-currentUser = name;
-
-socket.emit("login", name);
-
-/* ONLINE USERS */
-socket.on("onlineUsers", (list)=>{
-  users.innerHTML="";
-  list.forEach(u=>{
-    if(u !== currentUser){
-      users.innerHTML += `
-        <div class="user online" onclick="openChat('${u}')">${u}</div>
-      `;
-    }
-  });
-});
-
-/* OPEN CHAT */
-function openChat(user){
-  currentChat = user;
-  messages.innerHTML="";
+/* ENTER */
+function enter(){
+  start.style.display="none";
+  main.style.display="block";
+  loadPosts();
+  loadAnn();
 }
 
-/* SEND MESSAGE */
-msgBox.addEventListener("keypress", (e)=>{
-  if(e.key === "Enter"){
-    socket.emit("sendMessage", {
-      from: currentUser,
-      to: currentChat,
-      text: msgBox.value
-    });
-
-    msgBox.value="";
-  }
-
-  socket.emit("typing", {
-    from: currentUser,
-    to: currentChat
+/* OWNER LOGIN */
+async function codeLogin(){
+  let r = await fetch("/api/code-login",{
+    method:"POST",
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({code:prompt("Enter code")})
   });
-});
 
-/* RECEIVE MESSAGE */
-socket.on("receiveMessage", (data)=>{
-  if(data.from === currentChat || data.to === currentChat){
-    messages.innerHTML += `<div>${data.from}: ${data.text}</div>`;
+  let d = await r.json();
+  if(d.error) return alert("bad code");
+
+  user = d.username;
+  role = d.role;
+
+  alert("Logged in as OWNER");
+}
+
+/* POSTS */
+async function createPost(){
+  await fetch("/api/post",{
+    method:"POST",
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      username:user,
+      title:title.value,
+      text1:t1.value,
+      text2:t2.value,
+      text3:t3.value,
+      img:img.value
+    })
+  });
+
+  loadPosts();
+}
+
+/* LOAD POSTS */
+async function loadPosts(){
+  let r = await fetch("/api/posts");
+  let d = await r.json();
+
+  posts.innerHTML="";
+  d.forEach(p=>{
+    posts.innerHTML+=`
+      <div onclick="profile('${p.username}')">
+        <b>${p.title}</b><br>
+        by ${p.username}<br>
+        ${p.text1}<br>
+        ${p.text2}<br>
+        ${p.text3}<br>
+        <img src="${p.img}" width="100"><hr>
+      </div>
+    `;
+  });
+}
+
+/* SEARCH */
+async function search(){
+  let r = await fetch("/api/search?q="+search.value);
+  let d = await r.json();
+
+  posts.innerHTML="";
+  d.forEach(p=>{
+    posts.innerHTML+=`<div>${p.title} - ${p.username}</div>`;
+  });
+}
+
+/* PROFILE */
+function profile(name){
+  if(role === "owner"){
+    if(confirm("Make staff?")){
+      fetch("/api/staff",{
+        method:"POST",
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({user:name})
+      });
+    }
   }
-});
 
-/* TYPING */
-socket.on("typing", (user)=>{
-  typing.innerText = user + " is typing...";
-  setTimeout(()=> typing.innerText="", 1000);
-});
+  let newName = prompt("change name?");
+  let pfp = prompt("pfp url?");
+
+  fetch("/api/profile",{
+    method:"POST",
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      old:name,
+      new:newName,
+      pfp
+    })
+  });
+}
+
+/* ANNOUNCEMENTS */
+async function postAnn(){
+  await fetch("/api/announce",{
+    method:"POST",
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      text:annText.value,
+      img:annImg.value
+    })
+  });
+
+  loadAnn();
+}
+
+async function loadAnn(){
+  let r = await fetch("/api/announce");
+  let d = await r.json();
+
+  annList.innerHTML="";
+  d.forEach(a=>{
+    annList.innerHTML+=`
+      <div>${a.text}<br>
+      <img src="${a.img}" width="100"></div>
+    `;
+  });
+}
 </script>
 
 </body>

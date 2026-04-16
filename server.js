@@ -1,14 +1,6 @@
 const express = require("express");
 const mongoose = require("mongoose");
-const jwt = require("jsonwebtoken");
-const http = require("http");
-const { Server } = require("socket.io");
-const path = require("path");
-require("dotenv").config();
-
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
 
 app.use(express.json());
 app.use(express.static("public"));
@@ -16,78 +8,96 @@ app.use(express.static("public"));
 mongoose.connect(process.env.MONGO_URL);
 
 /* MODELS */
+
 const User = mongoose.model("User", new mongoose.Schema({
   username: String,
-  email: String,
-  password: String,
-  friends: [String]
+  pfp: String,
+  role: { type:String, default:"user" }
 }));
 
-const Message = mongoose.model("Message", new mongoose.Schema({
-  from: String,
-  to: String,
-  text: String
+const Post = mongoose.model("Post", new mongoose.Schema({
+  username: String,
+  title: String,
+  text1: String,
+  text2: String,
+  text3: String,
+  img: String
 }));
 
-/* ONLINE USERS */
-let onlineUsers = {};
+const Announcement = mongoose.model("Announcement", new mongoose.Schema({
+  text: String,
+  img: String
+}));
 
-/* SOCKET.IO */
-io.on("connection", (socket) => {
+/* OWNER LOGIN CODE */
+app.post("/api/code-login", async (req,res)=>{
+  if(req.body.code !== "832820") return res.json({error:"bad code"});
 
-  socket.on("login", (username)=>{
-    onlineUsers[username] = socket.id;
-    io.emit("onlineUsers", Object.keys(onlineUsers));
-  });
+  let user = await User.findOne({ username:"social" });
 
-  socket.on("sendMessage", async (data)=>{
-    await Message.create(data);
+  if(!user){
+    user = await User.create({ username:"social", role:"owner" });
+  }
 
-    if(onlineUsers[data.to]){
-      io.to(onlineUsers[data.to]).emit("receiveMessage", data);
-    }
-
-    socket.emit("receiveMessage", data);
-  });
-
-  socket.on("typing", (data)=>{
-    if(onlineUsers[data.to]){
-      io.to(onlineUsers[data.to]).emit("typing", data.from);
-    }
-  });
-
-  socket.on("disconnect", ()=>{
-    for(let user in onlineUsers){
-      if(onlineUsers[user] === socket.id){
-        delete onlineUsers[user];
-      }
-    }
-    io.emit("onlineUsers", Object.keys(onlineUsers));
-  });
-});
-
-/* AUTH */
-app.post("/api/register", async (req,res)=>{
-  const user = await User.create(req.body);
   res.json(user);
 });
 
-app.post("/api/login", async (req,res)=>{
-  const user = await User.findOne(req.body);
-  if(!user) return res.json({ error:"Invalid" });
-  res.json(user);
-});
+/* CHANGE PROFILE */
+app.post("/api/profile", async (req,res)=>{
+  let user = await User.findOne({ username:req.body.old });
 
-/* FRIENDS */
-app.post("/api/addfriend", async (req,res)=>{
-  const user = await User.findOne({ username:req.body.user });
-  user.friends.push(req.body.friend);
+  if(!user) user = await User.create({ username:req.body.old });
+
+  user.username = req.body.new;
+  user.pfp = req.body.pfp;
+
   await user.save();
-  res.json({ success:true });
+  res.json(user);
 });
 
-app.get("/", (req,res)=>{
-  res.sendFile(path.join(__dirname,"public","index.html"));
+/* POSTS */
+app.post("/api/post", async (req,res)=>{
+  const post = await Post.create(req.body);
+  res.json(post);
 });
 
-server.listen(process.env.PORT || 3000);
+app.get("/api/posts", async (req,res)=>{
+  const posts = await Post.find().sort({_id:-1});
+  res.json(posts);
+});
+
+/* SEARCH */
+app.get("/api/search", async (req,res)=>{
+  const q = req.query.q;
+
+  const posts = await Post.find({
+    $or:[
+      { title: { $regex:q, $options:"i"} },
+      { username: { $regex:q, $options:"i"} }
+    ]
+  });
+
+  res.json(posts);
+});
+
+/* ANNOUNCEMENTS */
+app.post("/api/announce", async (req,res)=>{
+  const a = await Announcement.create(req.body);
+  res.json(a);
+});
+
+app.get("/api/announce", async (req,res)=>{
+  res.json(await Announcement.find());
+});
+
+/* OWNER GIVE STAFF */
+app.post("/api/staff", async (req,res)=>{
+  const user = await User.findOne({ username:req.body.user });
+  if(user){
+    user.role = "staff";
+    await user.save();
+  }
+  res.json({success:true});
+});
+
+app.listen(process.env.PORT || 3000);
