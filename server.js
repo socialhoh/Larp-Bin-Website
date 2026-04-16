@@ -21,7 +21,14 @@ const Post = mongoose.model("Post", new mongoose.Schema({
   text1: String,
   text2: String,
   text3: String,
-  img: String
+  img: String,
+  likes: { type:Number, default:0 },
+  comments: [
+    {
+      user:String,
+      text:String
+    }
+  ]
 }));
 
 const Announcement = mongoose.model("Announcement", new mongoose.Schema({
@@ -29,7 +36,7 @@ const Announcement = mongoose.model("Announcement", new mongoose.Schema({
   img: String
 }));
 
-/* OWNER LOGIN CODE */
+/* OWNER LOGIN */
 app.post("/api/code-login", async (req,res)=>{
   if(req.body.code !== "832820") return res.json({error:"bad code"});
 
@@ -42,7 +49,13 @@ app.post("/api/code-login", async (req,res)=>{
   res.json(user);
 });
 
-/* CHANGE PROFILE */
+/* PROFILE */
+app.get("/api/profile/:name", async (req,res)=>{
+  let user = await User.findOne({ username:req.params.name });
+  if(!user) return res.json(null);
+  res.json(user);
+});
+
 app.post("/api/profile", async (req,res)=>{
   let user = await User.findOne({ username:req.body.old });
 
@@ -62,22 +75,29 @@ app.post("/api/post", async (req,res)=>{
 });
 
 app.get("/api/posts", async (req,res)=>{
-  const posts = await Post.find().sort({_id:-1});
-  res.json(posts);
+  res.json(await Post.find().sort({_id:-1}));
 });
 
-/* SEARCH */
-app.get("/api/search", async (req,res)=>{
-  const q = req.query.q;
+/* LIKE */
+app.post("/api/like/:id", async (req,res)=>{
+  const p = await Post.findById(req.params.id);
+  p.likes++;
+  await p.save();
+  res.json(p);
+});
 
-  const posts = await Post.find({
-    $or:[
-      { title: { $regex:q, $options:"i"} },
-      { username: { $regex:q, $options:"i"} }
-    ]
-  });
+/* COMMENT */
+app.post("/api/comment/:id", async (req,res)=>{
+  const p = await Post.findById(req.params.id);
+  p.comments.push(req.body);
+  await p.save();
+  res.json(p);
+});
 
-  res.json(posts);
+/* DELETE POST */
+app.delete("/api/post/:id", async (req,res)=>{
+  await Post.findByIdAndDelete(req.params.id);
+  res.json({success:true});
 });
 
 /* ANNOUNCEMENTS */
@@ -90,11 +110,16 @@ app.get("/api/announce", async (req,res)=>{
   res.json(await Announcement.find());
 });
 
-/* OWNER GIVE STAFF */
+app.delete("/api/announce/:id", async (req,res)=>{
+  await Announcement.findByIdAndDelete(req.params.id);
+  res.json({success:true});
+});
+
+/* STAFF */
 app.post("/api/staff", async (req,res)=>{
   const user = await User.findOne({ username:req.body.user });
   if(user){
-    user.role = "staff";
+    user.role="staff";
     await user.save();
   }
   res.json({success:true});
