@@ -1,152 +1,179 @@
 const express = require("express");
 const mongoose = require("mongoose");
-const path = require("path");
 const jwt = require("jsonwebtoken");
-const multer = require("multer");
+const path = require("path");
 require("dotenv").config();
 
 const app = express();
-
 app.use(express.json());
 app.use(express.static("public"));
-app.use("/uploads", express.static("uploads"));
 
 mongoose.connect(process.env.MONGO_URL);
 
-/* STORAGE (PROFILE PICS) */
-const storage = multer.diskStorage({
-  destination: "uploads/",
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + ".png");
-  }
-});
-const upload = multer({ storage });
-
 /* MODELS */
 const User = mongoose.model("User", new mongoose.Schema({
+  email: String,
   username: { type: String, unique: true },
   password: String,
-  role: { type: String, default: "user" },
-  pfp: { type: String, default: "" }
+  role: { type: String, default: "user" }
 }));
 
-const Post = mongoose.model("Post", new mongoose.Schema({
-  username: String,
-  text: String,
-  likes: { type: Number, default: 0 },
-  comments: [{ user: String, text: String }],
-  createdAt: { type: Date, default: Date.now }
+const Message = mongoose.model("Message", new mongoose.Schema({
+  from: String,
+  to: String,
+  text: String
 }));
 
-const Notification = mongoose.model("Notification", new mongoose.Schema({
+const Group = mongoose.model("Group", new mongoose.Schema({
+  name: String,
+  members: [String]
+}));
+
+const GroupMessage = mongoose.model("GroupMessage", new mongoose.Schema({
+  group: String,
   user: String,
   text: String
 }));
 
-/* AUTH MIDDLEWARE */
-function auth(req, res, next){
+/* AUTH */
+function auth(req,res,next){
   const token = req.headers.authorization;
-  if(!token) return res.status(401).json({ error: "No token" });
+  if(!token) return res.json({ error:"No token" });
 
   try {
-    req.user = jwt.verify(token, "secret123");
+    req.user = jwt.verify(token,"secret123");
     next();
   } catch {
-    res.status(401).json({ error: "Invalid token" });
+    res.json({ error:"Bad token" });
   }
 }
 
+/* OWNER AUTO LOGIN */
+const OWNER = {
+  email: "ptmrclap@yahoo.com",
+  password: "Collinlee13!",
+  username: "SocialHOH"
+};
+
 /* REGISTER */
-app.post("/api/register", async (req, res) => {
-  const { username, password } = req.body;
+app.post("/api/register", async (req,res)=>{
+  const { email, username, password } = req.body;
 
   if(await User.findOne({ username }))
-    return res.json({ error: "Username taken" });
+    return res.json({ error:"Username taken" });
 
   let role = "user";
-  if(username === "socialhoh" && !(await User.findOne({ role:"owner" }))){
+
+  if(
+    email === OWNER.email &&
+    password === OWNER.password &&
+    username === OWNER.username
+  ){
     role = "owner";
   }
 
-  const user = await User.create({ username, password, role });
+  const user = await User.create({ email, username, password, role });
 
   const token = jwt.sign({ username }, "secret123");
   res.json({ token, user });
 });
 
 /* LOGIN */
-app.post("/api/login", async (req, res) => {
-  const user = await User.findOne(req.body);
-  if(!user) return res.json({ error: "Invalid login" });
+app.post("/api/login", async (req,res)=>{
+  const { email, password } = req.body;
 
-  const token = jwt.sign({ username: user.username }, "secret123");
+  let user = await User.findOne({ email, password });
+
+  // AUTO OWNER IF MATCH
+  if(
+    email === OWNER.email &&
+    password === OWNER.password
+  ){
+    user = await User.findOne({ username: OWNER.username });
+
+    if(!user){
+      user = await User.create({
+        email: OWNER.email,
+        username: OWNER.username,
+        password: OWNER.password,
+        role: "owner"
+      });
+    }
+  }
+
+  if(!user) return res.json({ error:"Invalid login" });
+
+  const token = jwt.sign({ username:user.username }, "secret123");
   res.json({ token, user });
 });
 
-/* PROFILE PIC */
-app.post("/api/upload", auth, upload.single("pfp"), async (req, res) => {
-  await User.updateOne(
-    { username: req.user.username },
-    { pfp: req.file.filename }
-  );
-  res.json({ success: true });
+/* STAFF LOOKUP (SAFE) */
+app.get("/api/userlookup/:name", auth, async (req,res)=>{
+  const staff = await User.findOne({ username:req.user.username });
+
+  if(!staff || (staff.role !== "owner" && staff.role !== "staff")){
+    return res.json({ error:"No permission" });
+  }
+
+  const user = await User.findOne({ username:req.params.name });
+
+  if(!user) return res.json({ error:"User not found" });
+
+  res.json({
+    username: user.username,
+    email: user.email,
+    role: user.role
+  });
 });
 
-/* POSTS */
-app.post("/api/post", auth, async (req, res) => {
-  const post = await Post.create({
-    username: req.user.username,
+/* DMs */
+app.post("/api/message", auth, async (req,res)=>{
+  await Message.create({
+    from: req.user.username,
+    to: req.body.to,
     text: req.body.text
   });
-  res.json(post);
+
+  res.json({ success:true });
 });
 
-app.get("/api/posts", async (req, res) => {
-  const posts = await Post.find().sort({ createdAt:-1 });
-  res.json(posts);
+app.get("/api/messages/:user", auth, async (req,res)=>{
+  const msgs = await Message.find({
+    $or:[
+      { from:req.user.username, to:req.params.user },
+      { from:req.params.user, to:req.user.username }
+    ]
+  });
+
+  res.json(msgs);
 });
 
-/* LIKE */
-app.post("/api/like", auth, async (req, res) => {
-  await Post.updateOne({ _id:req.body.id }, { $inc:{ likes:1 } });
+/* GROUPS */
+app.post("/api/group", auth, async (req,res)=>{
+  const group = await Group.create({
+    name: req.body.name,
+    members: [req.user.username, ...req.body.members]
+  });
 
-  await Notification.create({
-    user: req.body.owner,
-    text: req.user.username + " liked your post"
+  res.json(group);
+});
+
+app.post("/api/group/msg", auth, async (req,res)=>{
+  await GroupMessage.create({
+    group: req.body.group,
+    user: req.user.username,
+    text: req.body.text
   });
 
   res.json({ success:true });
 });
 
-/* COMMENTS */
-app.post("/api/comment", auth, async (req, res) => {
-  await Post.updateOne(
-    { _id:req.body.id },
-    { $push:{ comments:{ user:req.user.username, text:req.body.text } } }
-  );
-
-  await Notification.create({
-    user: req.body.owner,
-    text: req.user.username + " commented on your post"
-  });
-
-  res.json({ success:true });
+app.get("/api/group/:name", auth, async (req,res)=>{
+  const msgs = await GroupMessage.find({ group:req.params.name });
+  res.json(msgs);
 });
 
-/* NOTIFICATIONS */
-app.get("/api/notifications", auth, async (req,res)=>{
-  const data = await Notification.find({ user:req.user.username });
-  res.json(data);
-});
-
-/* PROFILE */
-app.get("/api/user/:name", async (req,res)=>{
-  const user = await User.findOne({ username:req.params.name });
-  const posts = await Post.find({ username:req.params.name });
-
-  res.json({ user, posts });
-});
-
+/* FRONT */
 app.get("/", (req,res)=>{
   res.sendFile(path.join(__dirname,"public","index.html"));
 });

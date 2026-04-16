@@ -1,93 +1,154 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Larp Bin</title>
-<style>
-body { background:#0a0a0f; color:white; font-family:monospace; }
-header { display:flex; justify-content:space-between; padding:10px; background:#111; }
+<title>Larp Chat</title>
 
-.post { background:#111; padding:10px; margin:10px; border:1px solid #222; }
-img { width:30px; height:30px; border-radius:50%; }
+<style>
+body { display:flex; margin:0; background:#0a0a0f; color:white; font-family:monospace; }
+
+.sidebar { width:220px; background:#111; padding:10px; }
+.main { flex:1; padding:20px; }
+
+.msg { background:#111; margin:5px; padding:5px; }
+
+.hidden { display:none; }
 </style>
 </head>
 
 <body>
 
-<header>
-  <div>LARP BIN</div>
-  <button onclick="loadNotifications()">🔔</button>
-</header>
+<div class="sidebar">
+  <h3>LARP CHAT</h3>
 
-<input id="user" placeholder="user">
-<input id="pass" placeholder="pass">
-<button onclick="register()">Register</button>
-<button onclick="login()">Login</button>
+  <button onclick="setMode('dm')">DM</button>
+  <button onclick="setMode('group')">Group</button>
+  <button onclick="showLookup()" id="staffBtn" class="hidden">Lookup</button>
+</div>
 
-<br><br>
+<div class="main">
 
-<input id="postText" placeholder="post">
-<button onclick="post()">Post</button>
+  <div id="auth">
+    <input id="email" placeholder="email">
+    <input id="user" placeholder="username">
+    <input id="pass" placeholder="password">
+    <button onclick="register()">Register</button>
+    <button onclick="login()">Login</button>
+  </div>
 
-<div id="feed"></div>
-<div id="noti"></div>
+  <div id="chat" class="hidden">
+    <input id="target" placeholder="user/group">
+    <input id="msg" placeholder="message">
+    <button onclick="send()">Send</button>
+
+    <div id="messages"></div>
+  </div>
+
+  <div id="lookup" class="hidden">
+    <input id="lookupUser" placeholder="username">
+    <button onclick="lookup()">Search</button>
+
+    <div id="lookupResult"></div>
+  </div>
+
+</div>
 
 <script>
-let token = "";
+let token="";
+let currentUser=null;
+let mode="dm";
 
 /* AUTH */
 async function register(){
-  let r = await fetch("/api/register",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user.value,password:pass.value})});
+  let r = await fetch("/api/register",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    email:email.value,
+    username:user.value,
+    password:pass.value
+  })});
   let d = await r.json();
-  token = d.token;
+  if(d.error) return alert(d.error);
+  alert("Registered ✅");
 }
 
 async function login(){
-  let r = await fetch("/api/login",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user.value,password:pass.value})});
-  let d = await r.json();
-  token = d.token;
-}
-
-/* POST */
-async function post(){
-  await fetch("/api/post",{method:"POST",headers:{'Content-Type':'application/json','Authorization':token},body:JSON.stringify({text:postText.value})});
-  loadPosts();
-}
-
-async function loadPosts(){
-  let r = await fetch("/api/posts");
+  let r = await fetch("/api/login",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    email:email.value,
+    password:pass.value
+  })});
   let d = await r.json();
 
-  feed.innerHTML="";
-  d.forEach(p=>{
-    feed.innerHTML+=`
-      <div class="post">
-        <b>${p.username}</b>
-        <p>${p.text}</p>
-        ❤️ ${p.likes}
-        <button onclick="like('${p._id}','${p.username}')">Like</button>
-      </div>
-    `;
+  if(d.error) return alert(d.error);
+
+  token=d.token;
+  currentUser=d.user;
+
+  auth.classList.add("hidden");
+  chat.classList.remove("hidden");
+
+  if(currentUser.role === "owner" || currentUser.role === "staff"){
+    staffBtn.classList.remove("hidden");
+  }
+
+  alert("Login successful ✅");
+}
+
+/* MODE */
+function setMode(m){ mode=m; }
+
+/* SEND */
+async function send(){
+  if(mode==="dm"){
+    await fetch("/api/message",{method:"POST",headers:{'Content-Type':'application/json','Authorization':token},body:JSON.stringify({
+      to:target.value,
+      text:msg.value
+    })});
+    loadDM();
+  } else {
+    await fetch("/api/group/msg",{method:"POST",headers:{'Content-Type':'application/json','Authorization':token},body:JSON.stringify({
+      group:target.value,
+      text:msg.value
+    })});
+    loadGroup();
+  }
+}
+
+/* LOAD */
+async function loadDM(){
+  let r = await fetch("/api/messages/"+target.value,{headers:{'Authorization':token}});
+  let d = await r.json();
+
+  messages.innerHTML="";
+  d.forEach(m=>{
+    messages.innerHTML+=`<div class="msg">${m.from}: ${m.text}</div>`;
   });
 }
 
-/* LIKE */
-async function like(id,owner){
-  await fetch("/api/like",{method:"POST",headers:{'Content-Type':'application/json','Authorization':token},body:JSON.stringify({id,owner})});
-  loadPosts();
-}
-
-/* NOTIFICATIONS */
-async function loadNotifications(){
-  let r = await fetch("/api/notifications",{headers:{'Authorization':token}});
+async function loadGroup(){
+  let r = await fetch("/api/group/"+target.value,{headers:{'Authorization':token}});
   let d = await r.json();
 
-  noti.innerHTML="";
-  d.forEach(n=>{
-    noti.innerHTML+=`<div>${n.text}</div>`;
+  messages.innerHTML="";
+  d.forEach(m=>{
+    messages.innerHTML+=`<div class="msg">${m.user}: ${m.text}</div>`;
   });
 }
 
-loadPosts();
+/* LOOKUP */
+function showLookup(){
+  lookup.classList.remove("hidden");
+}
+
+async function lookup(){
+  let r = await fetch("/api/userlookup/"+lookupUser.value,{headers:{'Authorization':token}});
+  let d = await r.json();
+
+  if(d.error) return alert(d.error);
+
+  lookupResult.innerHTML = `
+    Username: ${d.username}<br>
+    Email: ${d.email}<br>
+    Role: ${d.role}
+  `;
+}
 </script>
 
 </body>
