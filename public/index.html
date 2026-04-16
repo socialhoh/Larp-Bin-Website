@@ -2,153 +2,97 @@
 <html>
 <head>
 <title>Larp Chat</title>
+<script src="/socket.io/socket.io.js"></script>
 
 <style>
-body { display:flex; margin:0; background:#0a0a0f; color:white; font-family:monospace; }
+body { margin:0; display:flex; background:#0a0a0f; color:white; font-family:Arial; }
 
-.sidebar { width:220px; background:#111; padding:10px; }
-.main { flex:1; padding:20px; }
+/* SIDEBAR */
+.sidebar { width:200px; background:#111; padding:10px; }
+.user { cursor:pointer; padding:5px; }
+.online { color:lime; }
 
-.msg { background:#111; margin:5px; padding:5px; }
-
-.hidden { display:none; }
+/* CHAT */
+.chat { flex:1; display:flex; flex-direction:column; }
+.messages { flex:1; padding:10px; }
+.typing { font-size:12px; color:gray; }
 </style>
 </head>
 
 <body>
 
 <div class="sidebar">
-  <h3>LARP CHAT</h3>
-
-  <button onclick="setMode('dm')">DM</button>
-  <button onclick="setMode('group')">Group</button>
-  <button onclick="showLookup()" id="staffBtn" class="hidden">Lookup</button>
+  <h3>Users</h3>
+  <div id="users"></div>
 </div>
 
-<div class="main">
+<div class="chat">
+  <div class="messages" id="messages"></div>
 
-  <div id="auth">
-    <input id="email" placeholder="email">
-    <input id="user" placeholder="username">
-    <input id="pass" placeholder="password">
-    <button onclick="register()">Register</button>
-    <button onclick="login()">Login</button>
-  </div>
+  <div class="typing" id="typing"></div>
 
-  <div id="chat" class="hidden">
-    <input id="target" placeholder="user/group">
-    <input id="msg" placeholder="message">
-    <button onclick="send()">Send</button>
-
-    <div id="messages"></div>
-  </div>
-
-  <div id="lookup" class="hidden">
-    <input id="lookupUser" placeholder="username">
-    <button onclick="lookup()">Search</button>
-
-    <div id="lookupResult"></div>
-  </div>
-
+  <input id="msgBox" placeholder="message">
 </div>
 
 <script>
-let token="";
-let currentUser=null;
-let mode="dm";
+let socket = io();
+let currentUser = "";
+let currentChat = "";
 
-/* AUTH */
-async function register(){
-  let r = await fetch("/api/register",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({
-    email:email.value,
-    username:user.value,
-    password:pass.value
-  })});
-  let d = await r.json();
-  if(d.error) return alert(d.error);
-  alert("Registered ✅");
+/* LOGIN QUICK */
+let name = prompt("Enter username");
+currentUser = name;
+
+socket.emit("login", name);
+
+/* ONLINE USERS */
+socket.on("onlineUsers", (list)=>{
+  users.innerHTML="";
+  list.forEach(u=>{
+    if(u !== currentUser){
+      users.innerHTML += `
+        <div class="user online" onclick="openChat('${u}')">${u}</div>
+      `;
+    }
+  });
+});
+
+/* OPEN CHAT */
+function openChat(user){
+  currentChat = user;
+  messages.innerHTML="";
 }
 
-async function login(){
-  let r = await fetch("/api/login",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({
-    email:email.value,
-    password:pass.value
-  })});
-  let d = await r.json();
+/* SEND MESSAGE */
+msgBox.addEventListener("keypress", (e)=>{
+  if(e.key === "Enter"){
+    socket.emit("sendMessage", {
+      from: currentUser,
+      to: currentChat,
+      text: msgBox.value
+    });
 
-  if(d.error) return alert(d.error);
-
-  token=d.token;
-  currentUser=d.user;
-
-  auth.classList.add("hidden");
-  chat.classList.remove("hidden");
-
-  if(currentUser.role === "owner" || currentUser.role === "staff"){
-    staffBtn.classList.remove("hidden");
+    msgBox.value="";
   }
 
-  alert("Login successful ✅");
-}
+  socket.emit("typing", {
+    from: currentUser,
+    to: currentChat
+  });
+});
 
-/* MODE */
-function setMode(m){ mode=m; }
-
-/* SEND */
-async function send(){
-  if(mode==="dm"){
-    await fetch("/api/message",{method:"POST",headers:{'Content-Type':'application/json','Authorization':token},body:JSON.stringify({
-      to:target.value,
-      text:msg.value
-    })});
-    loadDM();
-  } else {
-    await fetch("/api/group/msg",{method:"POST",headers:{'Content-Type':'application/json','Authorization':token},body:JSON.stringify({
-      group:target.value,
-      text:msg.value
-    })});
-    loadGroup();
+/* RECEIVE MESSAGE */
+socket.on("receiveMessage", (data)=>{
+  if(data.from === currentChat || data.to === currentChat){
+    messages.innerHTML += `<div>${data.from}: ${data.text}</div>`;
   }
-}
+});
 
-/* LOAD */
-async function loadDM(){
-  let r = await fetch("/api/messages/"+target.value,{headers:{'Authorization':token}});
-  let d = await r.json();
-
-  messages.innerHTML="";
-  d.forEach(m=>{
-    messages.innerHTML+=`<div class="msg">${m.from}: ${m.text}</div>`;
-  });
-}
-
-async function loadGroup(){
-  let r = await fetch("/api/group/"+target.value,{headers:{'Authorization':token}});
-  let d = await r.json();
-
-  messages.innerHTML="";
-  d.forEach(m=>{
-    messages.innerHTML+=`<div class="msg">${m.user}: ${m.text}</div>`;
-  });
-}
-
-/* LOOKUP */
-function showLookup(){
-  lookup.classList.remove("hidden");
-}
-
-async function lookup(){
-  let r = await fetch("/api/userlookup/"+lookupUser.value,{headers:{'Authorization':token}});
-  let d = await r.json();
-
-  if(d.error) return alert(d.error);
-
-  lookupResult.innerHTML = `
-    Username: ${d.username}<br>
-    Email: ${d.email}<br>
-    Role: ${d.role}
-  `;
-}
+/* TYPING */
+socket.on("typing", (user)=>{
+  typing.innerText = user + " is typing...";
+  setTimeout(()=> typing.innerText="", 1000);
+});
 </script>
 
 </body>
