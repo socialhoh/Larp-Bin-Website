@@ -4,39 +4,107 @@
 <title>LARP BIN</title>
 
 <style>
-body { margin:0; background:#050505; color:#0f0; font-family:monospace; }
-
-/* SCREEN 1 */
-#start {
-  display:flex;
-  height:100vh;
-  justify-content:center;
-  align-items:center;
-  flex-direction:column;
+body {
+  margin:0;
+  background:#0d0d0d;
+  color:#e5e5e5;
+  font-family:Arial;
 }
 
-button {
-  background:black;
-  color:#0f0;
-  border:1px solid #0f0;
+/* HEADER */
+.header {
+  background:#111;
+  padding:15px;
+  display:flex;
+  justify-content:space-between;
+  border-bottom:1px solid #222;
+}
+
+.logo {
+  font-size:20px;
+  font-weight:bold;
+  color:#00ffcc;
+}
+
+/* MAIN */
+.container {
+  display:flex;
+}
+
+/* SIDEBAR */
+.sidebar {
+  width:220px;
+  background:#0f0f0f;
+  border-right:1px solid #222;
+  padding:15px;
+}
+
+.sidebar button {
+  width:100%;
+  margin-bottom:10px;
+  background:#111;
+  border:1px solid #333;
+  color:white;
   padding:10px;
   cursor:pointer;
 }
 
-/* MAIN GRID */
-#main { display:none; padding:20px; }
-
-.grid {
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:20px;
+.sidebar button:hover {
+  background:#1a1a1a;
 }
 
-.box {
-  border:1px solid #0f0;
+/* CONTENT */
+.content {
+  flex:1;
+  padding:20px;
+}
+
+/* POSTS */
+.post {
+  background:#111;
+  padding:15px;
+  margin-bottom:15px;
+  border:1px solid #222;
+}
+
+.post-title {
+  font-size:18px;
+  color:#00ffcc;
+}
+
+.post-user {
+  font-size:12px;
+  color:#aaa;
+  cursor:pointer;
+}
+
+/* CREATE */
+.create {
+  background:#111;
+  padding:15px;
+  margin-bottom:20px;
+  border:1px solid #222;
+}
+
+/* INPUTS */
+input, textarea {
+  width:100%;
+  background:#0d0d0d;
+  border:1px solid #333;
+  color:white;
+  padding:8px;
+  margin-bottom:10px;
+}
+
+button {
+  background:#00ffcc;
+  border:none;
   padding:10px;
-  height:300px;
-  overflow:auto;
+  cursor:pointer;
+}
+
+button:hover {
+  opacity:0.8;
 }
 
 </style>
@@ -44,62 +112,52 @@ button {
 
 <body>
 
-<!-- START SCREEN -->
-<div id="start">
-  <h1>LARP BIN</h1>
-  <button onclick="enter()">CONTINUE</button>
+<!-- HEADER -->
+<div class="header">
+  <div class="logo">LARP BIN</div>
+
+  <div>
+    <input id="searchBox" placeholder="Search posts or users">
+    <button onclick="search()">Search</button>
+    <button onclick="codeLogin()">Owner Login</button>
+  </div>
 </div>
 
-<!-- MAIN -->
-<div id="main">
+<div class="container">
 
-<button onclick="codeLogin()">Login With Code</button>
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <button onclick="loadPosts()">📄 All Posts</button>
+    <button onclick="showCreate()">➕ Create Post</button>
+    <button onclick="loadAnn()">📢 Announcements</button>
+  </div>
 
-<div class="grid">
+  <!-- CONTENT -->
+  <div class="content">
 
-<!-- ANNOUNCEMENTS -->
-<div class="box">
-  <h3>Announcements</h3>
-  <textarea id="annText"></textarea><br>
-  <input id="annImg" placeholder="img url"><br>
-  <button onclick="postAnn()">Post</button>
-  <div id="annList"></div>
-</div>
+    <!-- CREATE -->
+    <div id="createBox" class="create" style="display:none;">
+      <h3>Create Post</h3>
 
-<!-- POSTS -->
-<div class="box">
-  <h3>Posts</h3>
+      <input id="title" placeholder="Title">
+      <textarea id="t1" placeholder="Text 1"></textarea>
+      <textarea id="t2" placeholder="Text 2"></textarea>
+      <textarea id="t3" placeholder="Text 3"></textarea>
+      <input id="img" placeholder="Image URL">
 
-  <input id="search" placeholder="search">
-  <button onclick="search()">Search</button>
+      <button onclick="createPost()">Post</button>
+    </div>
 
-  <div id="posts"></div>
+    <!-- POSTS -->
+    <div id="posts"></div>
 
-  <h4>Create Post</h4>
-  <input id="title" placeholder="title"><br>
-  <textarea id="t1"></textarea><br>
-  <textarea id="t2"></textarea><br>
-  <textarea id="t3"></textarea><br>
-  <input id="img" placeholder="img url"><br>
-
-  <button onclick="createPost()">POST</button>
-</div>
-
-</div>
+  </div>
 
 </div>
 
 <script>
 let user = "guest";
 let role = "user";
-
-/* ENTER */
-function enter(){
-  start.style.display="none";
-  main.style.display="block";
-  loadPosts();
-  loadAnn();
-}
 
 /* OWNER LOGIN */
 async function codeLogin(){
@@ -118,7 +176,12 @@ async function codeLogin(){
   alert("Logged in as OWNER");
 }
 
-/* POSTS */
+/* SHOW CREATE */
+function showCreate(){
+  createBox.style.display="block";
+}
+
+/* CREATE POST */
 async function createPost(){
   await fetch("/api/post",{
     method:"POST",
@@ -142,15 +205,20 @@ async function loadPosts(){
   let d = await r.json();
 
   posts.innerHTML="";
+
   d.forEach(p=>{
-    posts.innerHTML+=`
-      <div onclick="profile('${p.username}')">
-        <b>${p.title}</b><br>
-        by ${p.username}<br>
-        ${p.text1}<br>
-        ${p.text2}<br>
-        ${p.text3}<br>
-        <img src="${p.img}" width="100"><hr>
+    posts.innerHTML += `
+      <div class="post">
+        <div class="post-title">${p.title}</div>
+        <div class="post-user" onclick="profile('${p.username}')">
+          by ${p.username}
+        </div>
+
+        <p>${p.text1}</p>
+        <p>${p.text2}</p>
+        <p>${p.text3}</p>
+
+        ${p.img ? `<img src="${p.img}" width="200">` : ""}
       </div>
     `;
   });
@@ -158,12 +226,17 @@ async function loadPosts(){
 
 /* SEARCH */
 async function search(){
-  let r = await fetch("/api/search?q="+search.value);
+  let r = await fetch("/api/search?q="+searchBox.value);
   let d = await r.json();
 
   posts.innerHTML="";
   d.forEach(p=>{
-    posts.innerHTML+=`<div>${p.title} - ${p.username}</div>`;
+    posts.innerHTML += `
+      <div class="post">
+        <div class="post-title">${p.title}</div>
+        <div class="post-user">${p.username}</div>
+      </div>
+    `;
   });
 }
 
@@ -179,8 +252,8 @@ function profile(name){
     }
   }
 
-  let newName = prompt("change name?");
-  let pfp = prompt("pfp url?");
+  let newName = prompt("Change name?");
+  let pfp = prompt("PFP URL?");
 
   fetch("/api/profile",{
     method:"POST",
@@ -194,31 +267,24 @@ function profile(name){
 }
 
 /* ANNOUNCEMENTS */
-async function postAnn(){
-  await fetch("/api/announce",{
-    method:"POST",
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      text:annText.value,
-      img:annImg.value
-    })
-  });
-
-  loadAnn();
-}
-
 async function loadAnn(){
   let r = await fetch("/api/announce");
   let d = await r.json();
 
-  annList.innerHTML="";
+  posts.innerHTML="";
   d.forEach(a=>{
-    annList.innerHTML+=`
-      <div>${a.text}<br>
-      <img src="${a.img}" width="100"></div>
+    posts.innerHTML += `
+      <div class="post">
+        <b>Announcement</b><br>
+        ${a.text}<br>
+        ${a.img ? `<img src="${a.img}" width="200">` : ""}
+      </div>
     `;
   });
 }
+
+/* INIT */
+loadPosts();
 </script>
 
 </body>
