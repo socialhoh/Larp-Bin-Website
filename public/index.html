@@ -1,251 +1,93 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Larp Bin</title>
-  <style>
-    body {
-      margin: 0;
-      background: #0a0a0f;
-      color: #fff;
-      font-family: monospace;
-    }
+<title>Larp Bin</title>
+<style>
+body { background:#0a0a0f; color:white; font-family:monospace; }
+header { display:flex; justify-content:space-between; padding:10px; background:#111; }
 
-    header {
-      background: #111;
-      padding: 10px;
-      display: flex;
-      justify-content: space-between;
-      border-bottom: 1px solid #222;
-    }
-
-    .logo {
-      color: #7c5cff;
-      font-weight: bold;
-    }
-
-    .btn {
-      background: #1a1a2a;
-      border: 1px solid #333;
-      padding: 10px;
-      cursor: pointer;
-      margin: 5px;
-      display: inline-block;
-    }
-
-    .cube {
-      width: 150px;
-      height: 150px;
-      background: #111;
-      border: 1px solid #333;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      margin: 10px;
-      cursor: pointer;
-      transition: 0.2s;
-    }
-
-    .cube:hover {
-      background: #1a1a2a;
-      transform: scale(1.05);
-    }
-
-    .container {
-      padding: 20px;
-      text-align: center;
-    }
-
-    .hidden {
-      display: none;
-    }
-
-    input {
-      padding: 8px;
-      margin: 5px;
-      background: #111;
-      border: 1px solid #333;
-      color: white;
-    }
-
-    .post {
-      border: 1px solid #222;
-      padding: 10px;
-      margin: 10px;
-      text-align: left;
-      background: #111;
-    }
-
-    .username {
-      color: #7c5cff;
-    }
-  </style>
+.post { background:#111; padding:10px; margin:10px; border:1px solid #222; }
+img { width:30px; height:30px; border-radius:50%; }
+</style>
 </head>
 
 <body>
 
 <header>
-  <div class="logo">LARP BIN</div>
-  <div>
-    <button onclick="showPostPage()">POST</button>
-  </div>
+  <div>LARP BIN</div>
+  <button onclick="loadNotifications()">🔔</button>
 </header>
 
-<div id="home" class="container">
+<input id="user" placeholder="user">
+<input id="pass" placeholder="pass">
+<button onclick="register()">Register</button>
+<button onclick="login()">Login</button>
 
-  <h2>Login</h2>
-  <input id="user" placeholder="username">
-  <input id="pass" placeholder="password">
-  <br>
-  <button onclick="register()">Register</button>
-  <button onclick="login()">Login</button>
+<br><br>
 
-  <h2>Main</h2>
+<input id="postText" placeholder="post">
+<button onclick="post()">Post</button>
 
-  <div class="cube" onclick="showFeed()">VIEW POSTS</div>
-  <div class="cube" onclick="showAnnouncements()">VIEW ANNOUNCEMENTS</div>
-
-</div>
-
-<!-- POST PAGE -->
-<div id="postPage" class="container hidden">
-  <button onclick="goHome()">⬅ Back</button>
-
-  <h2>Create Post</h2>
-  <input id="postText" placeholder="write something">
-  <button onclick="post()">Post</button>
-</div>
-
-<!-- FEED -->
-<div id="feedPage" class="container hidden">
-  <button onclick="goHome()">⬅ Back</button>
-  <h2>Feed</h2>
-  <div id="feed"></div>
-</div>
-
-<!-- ANNOUNCEMENTS -->
-<div id="annPage" class="container hidden">
-  <button onclick="goHome()">⬅ Back</button>
-  <h2>Announcements</h2>
-
-  <div id="annInput" class="hidden">
-    <input id="annText" placeholder="announcement">
-    <button onclick="postAnnouncement()">Post</button>
-  </div>
-
-  <div id="annList"></div>
-</div>
+<div id="feed"></div>
+<div id="noti"></div>
 
 <script>
-let currentUser = null;
+let token = "";
 
-// AUTH
+/* AUTH */
 async function register(){
-  await fetch("/api/register", {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({
-      username:user.value,
-      password:pass.value
-    })
-  });
+  let r = await fetch("/api/register",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user.value,password:pass.value})});
+  let d = await r.json();
+  token = d.token;
 }
 
 async function login(){
-  let res = await fetch("/api/login", {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({
-      username:user.value,
-      password:pass.value
-    })
-  });
-
-  let data = await res.json();
-  currentUser = data;
-
-  if(currentUser.role === "owner" || currentUser.role === "staff"){
-    annInput.classList.remove("hidden");
-  }
+  let r = await fetch("/api/login",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user.value,password:pass.value})});
+  let d = await r.json();
+  token = d.token;
 }
 
-// NAV
-function goHome(){
-  hideAll();
-  home.classList.remove("hidden");
-}
-
-function showPostPage(){
-  hideAll();
-  postPage.classList.remove("hidden");
-}
-
-function showFeed(){
-  hideAll();
-  feedPage.classList.remove("hidden");
+/* POST */
+async function post(){
+  await fetch("/api/post",{method:"POST",headers:{'Content-Type':'application/json','Authorization':token},body:JSON.stringify({text:postText.value})});
   loadPosts();
 }
 
-function showAnnouncements(){
-  hideAll();
-  annPage.classList.remove("hidden");
-}
-
-function hideAll(){
-  home.classList.add("hidden");
-  postPage.classList.add("hidden");
-  feedPage.classList.add("hidden");
-  annPage.classList.add("hidden");
-}
-
-// POSTS
-async function post(){
-  await fetch("/api/post", {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({
-      username: user.value,
-      text: postText.value
-    })
-  });
-}
-
 async function loadPosts(){
-  let res = await fetch("/api/posts");
-  let data = await res.json();
+  let r = await fetch("/api/posts");
+  let d = await r.json();
 
-  feed.innerHTML = "";
-  data.forEach(p=>{
-    feed.innerHTML += `
+  feed.innerHTML="";
+  d.forEach(p=>{
+    feed.innerHTML+=`
       <div class="post">
-        <div class="username">${p.username}</div>
-        <div>${p.text}</div>
+        <b>${p.username}</b>
+        <p>${p.text}</p>
+        ❤️ ${p.likes}
+        <button onclick="like('${p._id}','${p.username}')">Like</button>
       </div>
     `;
   });
 }
 
-// ANNOUNCEMENTS (local for now)
-let announcements = [];
-
-function postAnnouncement(){
-  announcements.push({
-    user: user.value,
-    text: annText.value
-  });
-
-  renderAnnouncements();
+/* LIKE */
+async function like(id,owner){
+  await fetch("/api/like",{method:"POST",headers:{'Content-Type':'application/json','Authorization':token},body:JSON.stringify({id,owner})});
+  loadPosts();
 }
 
-function renderAnnouncements(){
-  annList.innerHTML = "";
-  announcements.forEach(a=>{
-    annList.innerHTML += `
-      <div class="post">
-        <b>${a.user}</b>: ${a.text}
-      </div>
-    `;
+/* NOTIFICATIONS */
+async function loadNotifications(){
+  let r = await fetch("/api/notifications",{headers:{'Authorization':token}});
+  let d = await r.json();
+
+  noti.innerHTML="";
+  d.forEach(n=>{
+    noti.innerHTML+=`<div>${n.text}</div>`;
   });
 }
+
+loadPosts();
 </script>
 
 </body>
