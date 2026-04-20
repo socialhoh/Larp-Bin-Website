@@ -1,122 +1,124 @@
 const express = require("express");
-const http = require("http");
-const { Server } = require("socket.io");
 const mongoose = require("mongoose");
 
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
+const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use(express.static("public"));
 
-/* ---------------- DATABASE ---------------- */
-mongoose.connect("mongodb://127.0.0.1:27017/larpbin");
+/* =========================
+   CONNECT TO MONGODB (FIX)
+   ========================= */
+mongoose.connect(process.env.MONGO_URL)
+.then(() => console.log("MongoDB connected"))
+.catch(err => console.log("MongoDB error:", err));
+
+/* =========================
+   DATABASE MODELS
+   ========================= */
 
 const User = mongoose.model("User", new mongoose.Schema({
-    username: String,
     email: String,
+    username: String,
     password: String,
-    isAdmin: Boolean,
-    verified: Boolean,
-    muted: Boolean,
-    banned: Boolean
+    isAdmin: { type: Boolean, default: false },
+    verified: { type: Boolean, default: false }
 }));
 
 const Post = mongoose.model("Post", new mongoose.Schema({
     title: String,
     content: String,
     author: String,
-    createdAt: Date
+    createdAt: { type: Date, default: Date.now }
 }));
 
-/* ---------------- SOCKET REALTIME ---------------- */
-io.on("connection", (socket) => {
-    console.log("User connected");
+const Comment = mongoose.model("Comment", new mongoose.Schema({
+    postId: String,
+    text: String,
+    user: String,
+    createdAt: { type: Date, default: Date.now }
+}));
 
-    socket.on("admin-join", async () => {
-        const users = await User.find();
-        const posts = await Post.find();
+/* =========================
+   AUTH
+   ========================= */
 
-        socket.emit("dashboard-update", { users, posts });
-    });
-});
-
-/* ---------------- AUTH ---------------- */
 app.post("/api/register", async (req, res) => {
-    const user = await User.create({
-        ...req.body,
-        isAdmin: false,
-        verified: false,
-        muted: false,
-        banned: false
-    });
-
-    io.emit("dashboard-update", {
-        users: await User.find(),
-        posts: await Post.find()
-    });
-
-    res.json(user);
+    try {
+        const user = await User.create(req.body);
+        res.json(user);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 app.post("/api/login", async (req, res) => {
     const user = await User.findOne(req.body);
 
-    if (!user) return res.status(401).json({ error: "Invalid" });
+    if (!user) {
+        return res.status(401).json({ error: "Invalid login" });
+    }
 
     res.json(user);
 });
 
-/* ---------------- POSTS ---------------- */
+/* =========================
+   POSTS
+   ========================= */
+
+app.get("/api/posts", async (req, res) => {
+    const posts = await Post.find().sort({ createdAt: -1 });
+    res.json(posts);
+});
+
 app.post("/api/posts", async (req, res) => {
     const post = await Post.create(req.body);
-
-    io.emit("dashboard-update", {
-        users: await User.find(),
-        posts: await Post.find()
-    });
-
     res.json(post);
 });
 
-/* DELETE POST (ADMIN) */
-app.delete("/api/admin/post/:id", async (req, res) => {
+app.delete("/api/posts/:id", async (req, res) => {
     await Post.findByIdAndDelete(req.params.id);
-
-    io.emit("dashboard-update", {
-        users: await User.find(),
-        posts: await Post.find()
-    });
-
     res.json({ success: true });
 });
 
-/* ---------------- USER MODERATION ---------------- */
+/* =========================
+   COMMENTS
+   ========================= */
+
+app.get("/api/comments/:postId", async (req, res) => {
+    const comments = await Comment.find({ postId: req.params.postId });
+    res.json(comments);
+});
+
+app.post("/api/comments", async (req, res) => {
+    const comment = await Comment.create(req.body);
+    res.json(comment);
+});
+
+/* =========================
+   ADMIN PANEL
+   ========================= */
+
+app.get("/api/admin/dashboard", async (req, res) => {
+    const users = await User.find();
+    const posts = await Post.find();
+
+    res.json({
+        users,
+        posts
+    });
+});
+
+/* VERIFY USER */
 app.post("/api/admin/verify/:id", async (req, res) => {
     const user = await User.findById(req.params.id);
     user.verified = !user.verified;
     await user.save();
 
-    io.emit("dashboard-update", {
-        users: await User.find(),
-        posts: await Post.find()
-    });
-
     res.json(user);
 });
 
-app.post("/api/admin/ban/:id", async (req, res) => {
-    const user = await User.findById(req.params.id);
-    user.banned = true;
-    await user.save();
-
-    io.emit("dashboard-update", {
-        users: await User.find(),
-        posts: await Post.find()
-    });
-
-    res.json(user);
+server = app.listen(PORT, () => {
+    console.log("Server running on port " + PORT);
 });
-
-server.listen(3000, () => console.log("Server running"));
