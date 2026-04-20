@@ -5,12 +5,10 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static("public"));
 
-/* ---------------- CONFIG (YOUR ADMIN ACCOUNT) ---------------- */
 const ADMIN_EMAIL = "ptmrclap@yahoo.com";
 const ADMIN_PASSWORD = "Collinlee13!";
 const ADMIN_USERNAME = "pwned";
 
-/* ---------------- DATA ---------------- */
 let users = [];
 let posts = [];
 let comments = [];
@@ -27,17 +25,12 @@ app.post("/api/register", (req, res) => {
         return res.status(400).json({ error: "User exists" });
     }
 
-    const isAdmin =
-        email === ADMIN_EMAIL &&
-        password === ADMIN_PASSWORD &&
-        username === ADMIN_USERNAME;
-
     users.push({
         id: Date.now(),
         email,
         password,
         username,
-        isAdmin
+        isAdmin: email === ADMIN_EMAIL
     });
 
     res.json({ success: true });
@@ -48,10 +41,7 @@ app.post("/api/login", (req, res) => {
     const { email, password, username } = req.body;
 
     const user = users.find(
-        u =>
-            u.email === email &&
-            u.password === password &&
-            u.username === username
+        u => u.email === email && u.password === password && u.username === username
     );
 
     if (!user) return res.status(401).json({ error: "Invalid login" });
@@ -87,9 +77,8 @@ app.post("/api/posts", (req, res) => {
     res.json(post);
 });
 
-/* DELETE (OWNER OR ADMIN) */
 app.delete("/api/posts/:id", (req, res) => {
-    const { userId, isAdmin, username } = req.body;
+    const { username, isAdmin } = req.body;
 
     const post = posts.find(p => p.id == req.params.id);
     if (!post) return res.status(404).json({ error: "Not found" });
@@ -122,12 +111,18 @@ app.post("/api/comments", (req, res) => {
 });
 
 /* ---------------- ADMIN PANEL ---------------- */
-app.get("/api/admin/users", (req, res) => {
-    res.json(users.map(u => ({
-        email: u.email,
-        username: u.username,
-        isAdmin: u.isAdmin
-    })));
+
+app.get("/api/admin/dashboard", (req, res) => {
+    res.json({
+        users: users.map(u => ({
+            username: u.username,
+            email: u.email,
+            isAdmin: u.isAdmin
+        })),
+        posts,
+        totalUsers: users.length,
+        totalPosts: posts.length
+    });
 });
 
 app.listen(PORT, () => {

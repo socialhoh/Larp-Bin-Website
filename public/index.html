@@ -1,164 +1,3 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>Larp Bin</title>
-
-<style>
-body {
-    margin: 0;
-    font-family: Arial;
-    background: #111;
-    color: white;
-}
-
-/* TOP BAR */
-.topbar {
-    background: #0b0b0b;
-    padding: 10px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid #222;
-}
-
-.topbar h2 {
-    margin: 0;
-}
-
-/* BUTTONS */
-.topbar button {
-    background: #333;
-    border: none;
-    color: white;
-    padding: 6px 10px;
-    margin-left: 5px;
-    cursor: pointer;
-}
-
-/* MAIN */
-.container {
-    width: 80%;
-    margin: auto;
-    padding-top: 10px;
-}
-
-input, textarea {
-    width: 100%;
-    margin: 5px 0;
-    padding: 8px;
-    background: #222;
-    border: none;
-    color: white;
-    box-sizing: border-box;
-}
-
-button {
-    background: #333;
-    border: none;
-    color: white;
-    padding: 6px 10px;
-    cursor: pointer;
-}
-
-/* POSTS */
-.post {
-    background: #1a1a1a;
-    margin: 10px 0;
-    padding: 10px;
-    cursor: pointer;
-}
-
-.post small {
-    color: #aaa;
-}
-
-.post:hover {
-    background: #222;
-}
-
-/* FULLSCREEN VIEW */
-.fullscreen {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: black;
-    overflow: auto;
-    padding: 20px;
-    z-index: 999;
-    white-space: pre-wrap;
-}
-
-/* LOGIN MODAL */
-.modal {
-    display: none;
-    position: fixed;
-    top:0;
-    left:0;
-    width:100%;
-    height:100%;
-    background:black;
-    z-index:999;
-    justify-content:center;
-    align-items:center;
-    flex-direction:column;
-}
-
-.modal input {
-    width: 300px;
-    margin: 5px;
-}
-
-</style>
-</head>
-
-<body>
-
-<!-- TOP BAR -->
-<div class="topbar">
-    <h2>Larp Bin</h2>
-    <div>
-        <button onclick="openLogin()">Login / Sign Up</button>
-        <button onclick="openPanel()">Panel</button>
-    </div>
-</div>
-
-<div class="container">
-
-<h3>Create Post</h3>
-
-<input id="title" placeholder="title">
-<input id="author" placeholder="author (optional)">
-<textarea id="content" placeholder="Shift + Enter = new line"></textarea>
-
-<button onclick="createPost()">Post</button>
-
-<div id="posts"></div>
-
-</div>
-
-<!-- LOGIN -->
-<div class="modal" id="loginModal">
-    <h2>Login / Sign Up</h2>
-
-    <input id="email" placeholder="email">
-    <input id="username" placeholder="username">
-    <input id="password" type="password" placeholder="password">
-
-    <button onclick="register()">Sign Up</button>
-    <button onclick="login()">Login</button>
-
-    <p id="msg"></p>
-
-    <button onclick="closeLogin()">Close</button>
-</div>
-
-<!-- FULLSCREEN POST -->
-<div id="full" class="fullscreen" onclick="this.style.display='none'"></div>
-
 <script>
 
 let user = null;
@@ -171,10 +10,11 @@ document.getElementById("content").addEventListener("keydown", function(e) {
     }
 });
 
-/* LOGIN UI */
+/* LOGIN MODAL */
 function openLogin() {
     loginModal.style.display = "flex";
 }
+
 function closeLogin() {
     loginModal.style.display = "none";
 }
@@ -256,7 +96,7 @@ async function createPost() {
     loadPosts();
 }
 
-/* EXPAND POST */
+/* FULLSCREEN POST */
 async function openPost(id) {
     const res = await fetch("/api/posts");
     const posts = await res.json();
@@ -272,19 +112,30 @@ ${post.content}`;
     full.style.display = "block";
 }
 
-/* PANEL (simple admin check UI hook) */
+/* =========================
+   🔐 ADMIN PANEL (FIXED)
+   ========================= */
+
 function openPanel() {
     if (!user?.isAdmin) {
         alert("Admin only");
         return;
     }
 
-    alert("Admin panel (backend ready)");
+    panel.style.display = "block";
+    loadAdmin();
 }
 
+async function loadAdmin() {
+    const res = await fetch("/api/admin/dashboard");
+    const data = await res.json();
+
+    panelData.innerText =
+        "USERS:\n" + JSON.stringify(data.users, null, 2) +
+        "\n\nPOSTS:\n" + JSON.stringify(data.posts, null, 2);
+}
+
+/* AUTO LOAD */
 loadPosts();
 
 </script>
-
-</body>
-</html>
