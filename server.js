@@ -15,7 +15,7 @@ mongoose.connect(process.env.MONGO_URL)
 .catch(err => console.log("MongoDB error:", err));
 
 /* =========================
-   ADMIN ACCOUNT (FORCE ADMIN)
+   ADMIN ACCOUNT
    ========================= */
 const ADMIN_EMAIL = "ptmrclap@yahoo.com";
 const ADMIN_PASSWORD = "Collinlee13!";
@@ -24,7 +24,6 @@ const ADMIN_USERNAME = "pwned";
 /* =========================
    MODELS
    ========================= */
-
 const User = mongoose.model("User", new mongoose.Schema({
     email: String,
     username: String,
@@ -37,6 +36,7 @@ const Post = mongoose.model("Post", new mongoose.Schema({
     title: String,
     content: String,
     author: String,
+    authorVerified: { type: Boolean, default: false },
     createdAt: { type: Date, default: Date.now }
 }));
 
@@ -48,43 +48,33 @@ const Comment = mongoose.model("Comment", new mongoose.Schema({
 }));
 
 /* =========================
-   REGISTER (AUTO ADMIN FIX)
+   AUTH
    ========================= */
 app.post("/api/register", async (req, res) => {
-    try {
-        const { email, username, password } = req.body;
+    const { email, username, password } = req.body;
 
-        const isAdmin =
-            email === ADMIN_EMAIL &&
-            password === ADMIN_PASSWORD &&
-            username === ADMIN_USERNAME;
+    const isAdmin =
+        email === ADMIN_EMAIL &&
+        username === ADMIN_USERNAME &&
+        password === ADMIN_PASSWORD;
 
-        const user = await User.create({
-            email,
-            username,
-            password,
-            isAdmin
-        });
+    const user = await User.create({
+        email,
+        username,
+        password,
+        isAdmin
+    });
 
-        res.json(user);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    res.json(user);
 });
 
-/* =========================
-   LOGIN (FIXED ADMIN CHECK)
-   ========================= */
 app.post("/api/login", async (req, res) => {
     const { email, username, password } = req.body;
 
     const user = await User.findOne({ email, username, password });
 
-    if (!user) {
-        return res.status(401).json({ error: "Invalid login" });
-    }
+    if (!user) return res.status(401).json({ error: "Invalid login" });
 
-    /* FORCE ADMIN IF MATCHES YOUR ACCOUNT */
     if (
         email === ADMIN_EMAIL &&
         username === ADMIN_USERNAME &&
@@ -106,11 +96,22 @@ app.get("/api/posts", async (req, res) => {
 });
 
 app.post("/api/posts", async (req, res) => {
-    const post = await Post.create(req.body);
+    const { title, content, author } = req.body;
+
+    const user = await User.findOne({ username: author });
+
+    const post = await Post.create({
+        title,
+        content,
+        author,
+        authorVerified: user?.verified || false
+    });
+
     res.json(post);
 });
 
-app.delete("/api/posts/:id", async (req, res) => {
+/* DELETE POST (ADMIN ONLY) */
+app.delete("/api/admin/post/:id", async (req, res) => {
     await Post.findByIdAndDelete(req.params.id);
     res.json({ success: true });
 });
@@ -134,13 +135,15 @@ app.post("/api/comments", async (req, res) => {
 app.get("/api/admin/dashboard", async (req, res) => {
     const users = await User.find();
     const posts = await Post.find();
-
     res.json({ users, posts });
 });
 
 /* VERIFY USER */
-app.post("/api/admin/verify/:id", async (req, res) => {
-    const user = await User.findById(req.params.id);
+app.post("/api/admin/verify", async (req, res) => {
+    const { username } = req.body;
+
+    const user = await User.findOne({ username });
+    if (!user) return res.status(404).json({ error: "User not found" });
 
     user.verified = !user.verified;
     await user.save();

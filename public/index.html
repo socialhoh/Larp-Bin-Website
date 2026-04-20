@@ -5,100 +5,65 @@
 <title>Larp Bin</title>
 
 <style>
-body {
-    margin: 0;
-    font-family: Arial;
-    background: #111;
-    color: white;
-}
+body { margin:0; font-family:Arial; background:#111; color:white; }
 
-/* TOP BAR */
 .topbar {
-    display: flex;
-    justify-content: space-between;
-    padding: 10px;
-    background: #0b0b0b;
-    border-bottom: 1px solid #222;
+    display:flex;
+    justify-content:space-between;
+    padding:10px;
+    background:#0b0b0b;
 }
 
-button {
-    background: #333;
-    color: white;
-    border: none;
-    padding: 6px 10px;
-    cursor: pointer;
-}
+button { background:#333; color:white; border:none; padding:6px; cursor:pointer; }
 
-/* LAYOUT */
-.container {
-    width: 80%;
-    margin: auto;
-    padding-top: 10px;
-}
+.container { width:80%; margin:auto; }
 
 input, textarea {
-    width: 100%;
-    margin: 5px 0;
-    padding: 8px;
-    background: #222;
-    border: none;
-    color: white;
+    width:100%;
+    padding:8px;
+    margin:5px 0;
+    background:#222;
+    color:white;
+    border:none;
 }
 
-/* POSTS */
 .post {
-    background: #1a1a1a;
-    padding: 10px;
-    margin: 10px 0;
+    background:#1a1a1a;
+    padding:10px;
+    margin:10px 0;
 }
 
-/* MODALS */
-.modal, .panel, .full {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: black;
-    z-index: 999;
-    padding: 20px;
-    overflow: auto;
-}
-
-/* ADMIN UI */
-.adminUser {
-    color: #00ffcc;
-    font-weight: bold;
-}
-
-.small {
-    font-size: 12px;
-    color: #aaa;
+.modal, .panel {
+    display:none;
+    position:fixed;
+    width:100%;
+    height:100%;
+    background:black;
+    top:0;
+    left:0;
+    padding:20px;
+    overflow:auto;
 }
 </style>
 </head>
 
 <body>
 
-<!-- TOP BAR -->
 <div class="topbar">
     <h2>Larp Bin</h2>
     <div>
-        <button onclick="openLogin()">Login</button>
+        <button onclick="loginModal.style.display='block'">Login</button>
         <button onclick="openPanel()">Panel</button>
     </div>
 </div>
 
-<!-- MAIN -->
 <div class="container">
 
-<h3>Create Post</h3>
+<h2>POSTS</h2>
 
 <input id="title" placeholder="title">
-<input id="author" placeholder="author (optional)">
+<input id="author" placeholder="author">
 <textarea id="content"></textarea>
-
 <button onclick="createPost()">Post</button>
 
 <div id="posts"></div>
@@ -107,93 +72,25 @@ input, textarea {
 
 <!-- LOGIN -->
 <div id="loginModal" class="modal">
-    <h2>Login / Sign Up</h2>
-
-    <input id="email" placeholder="email">
-    <input id="username" placeholder="username">
-    <input id="password" type="password" placeholder="password">
-
-    <button onclick="register()">Sign Up</button>
+    <h2>Login</h2>
+    <input id="email">
+    <input id="username">
+    <input id="password" type="password">
     <button onclick="login()">Login</button>
-
-    <p id="msg"></p>
-
-    <button onclick="loginModal.style.display='none'">Close</button>
 </div>
 
 <!-- PANEL -->
 <div id="panel" class="panel">
-    <h2>Admin Dashboard</h2>
-
-    <div class="adminUser" id="adminInfo"></div>
-
-    <h3>Users</h3>
-    <div id="userList"></div>
-
-    <h3>Posts</h3>
-    <div id="postList"></div>
-
+    <h2>Admin Panel</h2>
+    <div id="panelData"></div>
     <button onclick="panel.style.display='none'">Close</button>
 </div>
 
-<!-- FULL POST VIEW -->
-<div id="full" class="full" onclick="this.style.display='none'"></div>
-
 <script>
 
-let user = null;
+let user=null;
 
-/* SHIFT + ENTER */
-document.getElementById("content").addEventListener("keydown", function(e){
-    if(e.key === "Enter" && !e.shiftKey){
-        e.preventDefault();
-        createPost();
-    }
-});
-
-/* LOGIN */
-function openLogin(){
-    loginModal.style.display="block";
-}
-
-/* REGISTER */
-async function register(){
-    await fetch("/api/register",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-            email:email.value,
-            password:password.value,
-            username:username.value
-        })
-    });
-
-    msg.innerText="Account created";
-}
-
-/* LOGIN */
-async function login(){
-    const res = await fetch("/api/login",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-            email:email.value,
-            password:password.value,
-            username:username.value
-        })
-    });
-
-    const data = await res.json();
-
-    if(data.email){
-        user = data;
-        msg.innerText="Logged in";
-    } else {
-        msg.innerText="Failed";
-    }
-}
-
-/* POSTS */
+/* LOAD POSTS */
 async function loadPosts(){
     const res = await fetch("/api/posts");
     const data = await res.json();
@@ -206,14 +103,13 @@ async function loadPosts(){
 
         div.innerHTML=`
         <b>${p.title}</b><br>
-        <small>${p.author}</small><br>
+        ${p.author} ${p.authorVerified ? "✔️ Verified" : ""}<br>
         <p>${p.content}</p>
-        <button onclick="openPost(${p.id})">Expand</button>
         `;
 
         if(user?.isAdmin){
             div.innerHTML += `
-                <button onclick="deletePost(${p.id})">Delete</button>
+                <button onclick="deletePost('${p._id}')">Delete</button>
             `;
         }
 
@@ -221,7 +117,7 @@ async function loadPosts(){
     });
 }
 
-/* CREATE */
+/* CREATE POST */
 async function createPost(){
     await fetch("/api/posts",{
         method:"POST",
@@ -229,54 +125,50 @@ async function createPost(){
         body:JSON.stringify({
             title:title.value,
             content:content.value,
-            author:user?.username||author.value
+            author:author.value
         })
     });
 
-    content.value="";
     loadPosts();
 }
 
-/* EXPAND */
-async function openPost(id){
-    const res=await fetch("/api/posts");
-    const data=await res.json();
-    const post=data.find(p=>p.id===id);
-
-    full.innerText = `${post.title}\n\nby ${post.author}\n\n${post.content}`;
-    full.style.display="block";
-}
-
-/* DELETE (ADMIN) */
-async function deletePost(id){
-    await fetch("/api/admin/post/"+id,{
-        method:"DELETE"
+/* LOGIN */
+async function login(){
+    const res = await fetch("/api/login",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+            email:email.value,
+            username:username.value,
+            password:password.value
+        })
     });
 
+    user = await res.json();
+}
+
+/* DELETE */
+async function deletePost(id){
+    await fetch("/api/admin/post/"+id,{method:"DELETE"});
     loadPosts();
 }
 
 /* PANEL */
 async function openPanel(){
-    if(!user?.isAdmin){
-        alert("Admin only");
-        return;
-    }
+    if(!user?.isAdmin) return alert("Admin only");
 
     panel.style.display="block";
 
     const res = await fetch("/api/admin/dashboard");
     const data = await res.json();
 
-    adminInfo.innerText = "Logged in as: " + user.username;
+    panelData.innerHTML = `
+    USERS:<br>
+    ${data.users.map(u=>u.username).join("<br>")}
 
-    userList.innerHTML = data.users.map(u =>
-        `<div>${u.username} (${u.email})</div>`
-    ).join("");
-
-    postList.innerHTML = data.posts.map(p =>
-        `<div>${p.title} - ${p.author}</div>`
-    ).join("");
+    <br><br>POSTS:<br>
+    ${data.posts.map(p=>p.title).join("<br>")}
+    `;
 }
 
 loadPosts();
