@@ -110,8 +110,7 @@ app.post("/api/comments", (req, res) => {
     res.json({ success: true });
 });
 
-/* ---------------- ADMIN PANEL ---------------- */
-
+/* ---------------- ADMIN ---------------- */
 app.get("/api/admin/dashboard", (req, res) => {
     res.json({
         users: users.map(u => ({
@@ -119,12 +118,10 @@ app.get("/api/admin/dashboard", (req, res) => {
             email: u.email,
             isAdmin: u.isAdmin
         })),
-        posts,
-        totalUsers: users.length,
-        totalPosts: posts.length
+        posts
     });
 });
 
 app.listen(PORT, () => {
-    console.log(`Server running on ${PORT}`);
+    console.log("Server running on " + PORT);
 });
