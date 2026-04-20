@@ -26,15 +26,17 @@ body {
     margin: 0;
 }
 
+/* BUTTONS */
 .topbar button {
     background: #333;
     border: none;
     color: white;
     padding: 6px 10px;
+    margin-left: 5px;
     cursor: pointer;
 }
 
-/* CONTAINER */
+/* MAIN */
 .container {
     width: 80%;
     margin: auto;
@@ -48,6 +50,7 @@ input, textarea {
     background: #222;
     border: none;
     color: white;
+    box-sizing: border-box;
 }
 
 button {
@@ -63,11 +66,30 @@ button {
     background: #1a1a1a;
     margin: 10px 0;
     padding: 10px;
+    cursor: pointer;
 }
 
-.commentBtn {
-    margin-top: 5px;
-    cursor: pointer;
+.post small {
+    color: #aaa;
+}
+
+.post:hover {
+    background: #222;
+}
+
+/* FULLSCREEN VIEW */
+.fullscreen {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: black;
+    overflow: auto;
+    padding: 20px;
+    z-index: 999;
+    white-space: pre-wrap;
 }
 
 /* LOGIN MODAL */
@@ -79,29 +101,17 @@ button {
     width:100%;
     height:100%;
     background:black;
+    z-index:999;
     justify-content:center;
     align-items:center;
     flex-direction:column;
-    z-index:999;
 }
 
 .modal input {
     width: 300px;
+    margin: 5px;
 }
 
-/* COMMENTS MODAL */
-.commentModal {
-    display:none;
-    position:fixed;
-    top:0;
-    left:0;
-    width:100%;
-    height:100%;
-    background:#000;
-    padding:20px;
-    overflow:auto;
-    z-index:999;
-}
 </style>
 </head>
 
@@ -110,7 +120,10 @@ button {
 <!-- TOP BAR -->
 <div class="topbar">
     <h2>Larp Bin</h2>
-    <button onclick="openLogin()">Login / Sign Up</button>
+    <div>
+        <button onclick="openLogin()">Login / Sign Up</button>
+        <button onclick="openPanel()">Panel</button>
+    </div>
 </div>
 
 <div class="container">
@@ -127,52 +140,70 @@ button {
 
 </div>
 
-<!-- LOGIN MODAL -->
+<!-- LOGIN -->
 <div class="modal" id="loginModal">
     <h2>Login / Sign Up</h2>
+
     <input id="email" placeholder="email">
+    <input id="username" placeholder="username">
     <input id="password" type="password" placeholder="password">
 
-    <button onclick="login()">Login</button>
     <button onclick="register()">Sign Up</button>
+    <button onclick="login()">Login</button>
 
-    <p id="loginMsg"></p>
+    <p id="msg"></p>
 
     <button onclick="closeLogin()">Close</button>
 </div>
 
-<!-- COMMENTS MODAL -->
-<div class="commentModal" id="commentModal">
-    <h2>Comments</h2>
-    <div id="commentList"></div>
-
-    <input id="commentInput" placeholder="write comment">
-    <button onclick="sendComment()">Send</button>
-
-    <button onclick="closeComments()">Close</button>
-</div>
+<!-- FULLSCREEN POST -->
+<div id="full" class="fullscreen" onclick="this.style.display='none'"></div>
 
 <script>
+
 let user = null;
-let activePostId = null;
+
+/* SHIFT + ENTER */
+document.getElementById("content").addEventListener("keydown", function(e) {
+    if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        createPost();
+    }
+});
 
 /* LOGIN UI */
 function openLogin() {
     loginModal.style.display = "flex";
 }
-
 function closeLogin() {
     loginModal.style.display = "none";
+}
+
+/* REGISTER */
+async function register() {
+    const res = await fetch("/api/register", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+            email: email.value,
+            password: password.value,
+            username: username.value
+        })
+    });
+
+    const data = await res.json();
+    msg.innerText = data.success ? "Account created!" : data.error;
 }
 
 /* LOGIN */
 async function login() {
     const res = await fetch("/api/login", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
         body: JSON.stringify({
             email: email.value,
-            password: password.value
+            password: password.value,
+            username: username.value
         })
     });
 
@@ -180,25 +211,13 @@ async function login() {
 
     if (data.user) {
         user = data.user;
-        loginMsg.innerText = "Successfully logged in!";
+        msg.innerText = "Successfully logged in!";
+    } else {
+        msg.innerText = "Login failed";
     }
 }
 
-/* REGISTER */
-async function register() {
-    await fetch("/api/register", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({
-            email: email.value,
-            password: password.value
-        })
-    });
-
-    loginMsg.innerText = "Account created!";
-}
-
-/* POSTS (UNCHANGED STYLE) */
+/* POSTS */
 async function loadPosts() {
     const res = await fetch("/api/posts");
     const data = await res.json();
@@ -212,25 +231,24 @@ async function loadPosts() {
 
         div.innerHTML = `
             <b>${p.title}</b><br>
-            <small>${p.author}</small><br>
-            <pre>${p.content}</pre>
-
-            <div class="commentBtn" onclick="openComments(${p.id})">💬 Comments</div>
+            <small>by ${p.author}</small><br>
+            <p>${p.content.slice(0, 200)}...</p>
+            <button onclick="openPost(${p.id})">Expand</button>
         `;
 
         box.appendChild(div);
     });
 }
 
-/* CREATE POST (UNCHANGED BEHAVIOR) */
+/* CREATE POST */
 async function createPost() {
     await fetch("/api/posts", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
         body: JSON.stringify({
             title: title.value,
-            author: author.value,
-            content: content.value
+            content: content.value,
+            author: user?.username || author.value
         })
     });
 
@@ -238,45 +256,34 @@ async function createPost() {
     loadPosts();
 }
 
-/* COMMENTS */
-async function openComments(id) {
-    activePostId = id;
+/* EXPAND POST */
+async function openPost(id) {
+    const res = await fetch("/api/posts");
+    const posts = await res.json();
+    const post = posts.find(p => p.id === id);
 
-    const res = await fetch("/api/comments/" + id);
-    const data = await res.json();
+    full.innerText =
+`${post.title}
 
-    commentList.innerHTML = "";
+by ${post.author}
 
-    data.forEach(c => {
-        const div = document.createElement("div");
-        div.innerText = `${c.user}: ${c.text}`;
-        commentList.appendChild(div);
-    });
+${post.content}`;
 
-    commentModal.style.display = "block";
+    full.style.display = "block";
 }
 
-function closeComments() {
-    commentModal.style.display = "none";
-}
+/* PANEL (simple admin check UI hook) */
+function openPanel() {
+    if (!user?.isAdmin) {
+        alert("Admin only");
+        return;
+    }
 
-/* SEND COMMENT */
-async function sendComment() {
-    await fetch("/api/comments", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({
-            postId: activePostId,
-            text: commentInput.value,
-            user: user?.email
-        })
-    });
-
-    commentInput.value = "";
-    openComments(activePostId);
+    alert("Admin panel (backend ready)");
 }
 
 loadPosts();
+
 </script>
 
 </body>
