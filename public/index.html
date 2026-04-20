@@ -1,221 +1,110 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>LARP BIN</title>
+<meta charset="UTF-8">
+<title>Larp Bin</title>
 
 <style>
-body { background:#0d0d0d; color:white; font-family:Arial; margin:0; }
-
-.header {
-  background:#111;
-  padding:10px;
-  display:flex;
-  justify-content:space-between;
+body {
+    font-family: Arial;
+    background: #111;
+    color: white;
+    text-align: center;
 }
 
-.container { display:flex; }
-
-.sidebar {
-  width:200px;
-  background:#111;
-  padding:10px;
+.container {
+    width: 80%;
+    margin: auto;
 }
 
-.content { flex:1; padding:20px; }
+input, textarea {
+    width: 100%;
+    margin: 5px 0;
+    padding: 8px;
+    background: #222;
+    border: none;
+    color: white;
+}
+
+button {
+    padding: 8px 15px;
+    background: #444;
+    border: none;
+    color: white;
+    cursor: pointer;
+}
 
 .post {
-  background:#111;
-  padding:10px;
-  margin-bottom:10px;
-  border:1px solid #222;
+    background: #1a1a1a;
+    margin: 10px 0;
+    padding: 10px;
+    text-align: left;
 }
-
-.post-title { cursor:pointer; color:#00ffcc; }
-
-button { margin:5px; }
 </style>
 </head>
 
 <body>
 
-<div class="header">
-  <b>LARP BIN</b>
-  <button onclick="codeLogin()">Owner</button>
-</div>
+<h1>Larp Bin</h1>
 
 <div class="container">
 
-<div class="sidebar">
-  <button onclick="loadPosts()">Posts</button>
-  <button onclick="loadAnn()">Announcements</button>
-</div>
+<h2>Create Post</h2>
 
-<div class="content">
-  <div id="main"></div>
-</div>
+<input id="title" placeholder="Title">
+<input id="author" placeholder="Author (optional)">
+<textarea id="content" placeholder="Content"></textarea>
+
+<button onclick="createPost()">Post</button>
+
+<h2>Posts</h2>
+<div id="posts"></div>
 
 </div>
 
 <script>
-let user="guest";
-let role="user";
+async function loadPosts() {
+    const res = await fetch('/api/posts');
+    const data = await res.json();
 
-/* OWNER LOGIN */
-async function codeLogin(){
-  let code = prompt("code");
-  let r = await fetch("/api/code-login",{
-    method:"POST",
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({code})
-  });
+    const container = document.getElementById('posts');
+    container.innerHTML = '';
 
-  let d = await r.json();
-  if(d.error) return alert("bad code");
-
-  user=d.username;
-  role=d.role;
+    data.forEach(post => {
+        container.innerHTML += `
+            <div class="post">
+                <h3>${post.title}</h3>
+                <small>by ${post.author} | ${new Date(post.createdAt).toLocaleString()}</small>
+                <p>${post.content}</p>
+                <button onclick="deletePost(${post.id})">Delete</button>
+            </div>
+        `;
+    });
 }
 
-/* LOAD POSTS */
-async function loadPosts(){
-  let r = await fetch("/api/posts");
-  let d = await r.json();
+async function createPost() {
+    const title = document.getElementById('title').value;
+    const content = document.getElementById('content').value;
+    const author = document.getElementById('author').value;
 
-  main.innerHTML="";
+    await fetch('/api/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, content, author })
+    });
 
-  d.forEach(p=>{
-    main.innerHTML+=`
-      <div class="post">
-        <div class="post-title" onclick="openPost('${p._id}')">
-          ${p.title}
-        </div>
-      </div>
-    `;
-  });
+    document.getElementById('title').value = '';
+    document.getElementById('content').value = '';
+    document.getElementById('author').value = '';
+
+    loadPosts();
 }
 
-/* OPEN POST */
-async function openPost(id){
-  let r = await fetch("/api/posts");
-  let d = await r.json();
-  let p = d.find(x=>x._id===id);
-
-  main.innerHTML=`
-    <button onclick="loadPosts()">⬅ Back</button>
-
-    <div class="post">
-      <h2>${p.title}</h2>
-      <div onclick="viewProfile('${p.username}')">
-        by ${p.username}
-      </div>
-
-      <p>${p.text1}</p>
-      <p>${p.text2}</p>
-      <p>${p.text3}</p>
-
-      ${p.img ? `<img src="${p.img}" width="200">` : ""}
-
-      <br>
-      ❤️ ${p.likes}
-      <button onclick="like('${p._id}')">Like</button>
-
-      ${ (role==="owner"||role==="staff") ?
-        `<button onclick="delPost('${p._id}')">🗑</button>` : "" }
-
-      <h3>Comments</h3>
-      <div id="comments"></div>
-
-      <input id="commentBox" placeholder="comment">
-      <button onclick="comment('${p._id}')">Send</button>
-    </div>
-  `;
-
-  loadComments(p);
+async function deletePost(id) {
+    await fetch('/api/posts/' + id, { method: 'DELETE' });
+    loadPosts();
 }
 
-/* COMMENTS */
-function loadComments(p){
-  comments.innerHTML="";
-  p.comments.forEach(c=>{
-    comments.innerHTML+=`
-      <div onclick="viewProfile('${c.user}')">
-        <b>${c.user}</b>: ${c.text}
-      </div>
-    `;
-  });
-}
-
-async function comment(id){
-  await fetch("/api/comment/"+id,{
-    method:"POST",
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      user:user,
-      text:commentBox.value
-    })
-  });
-
-  openPost(id);
-}
-
-/* LIKE */
-async function like(id){
-  await fetch("/api/like/"+id,{method:"POST"});
-  openPost(id);
-}
-
-/* DELETE */
-async function delPost(id){
-  await fetch("/api/post/"+id,{method:"DELETE"});
-  loadPosts();
-}
-
-/* PROFILE */
-async function viewProfile(name){
-  let r = await fetch("/api/profile/"+name);
-  let u = await r.json();
-
-  main.innerHTML=`
-    <button onclick="loadPosts()">⬅ Back</button>
-
-    <div class="post">
-      <h2>${u.username}</h2>
-      ${u.pfp ? `<img src="${u.pfp}" width="100">` : ""}
-
-      ${ role==="owner" ?
-        `<button onclick="makeStaff('${u.username}')">Make Staff</button>` : "" }
-    </div>
-  `;
-}
-
-/* STAFF */
-async function makeStaff(name){
-  await fetch("/api/staff",{
-    method:"POST",
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({user:name})
-  });
-
-  alert("staff given");
-}
-
-/* ANN */
-async function loadAnn(){
-  let r = await fetch("/api/announce");
-  let d = await r.json();
-
-  main.innerHTML="";
-
-  d.forEach(a=>{
-    main.innerHTML+=`
-      <div class="post">
-        ${a.text}
-      </div>
-    `;
-  });
-}
-
-/* INIT */
 loadPosts();
 </script>
 
