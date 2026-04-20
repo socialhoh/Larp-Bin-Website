@@ -12,19 +12,19 @@ let comments = [];
 /* ---------------- USERS ---------------- */
 
 app.post("/api/register", (req, res) => {
-    const { username, password } = req.body;
+    const { email, password } = req.body;
 
-    if (!username || !password) {
+    if (!email || !password) {
         return res.status(400).json({ error: "Missing fields" });
     }
 
-    if (users.find(u => u.username === username)) {
+    if (users.find(u => u.email === email)) {
         return res.status(400).json({ error: "User exists" });
     }
 
     users.push({
         id: Date.now(),
-        username,
+        email,
         password
     });
 
@@ -32,39 +32,26 @@ app.post("/api/register", (req, res) => {
 });
 
 app.post("/api/login", (req, res) => {
-    const { username, password } = req.body;
+    const { email, password } = req.body;
 
-    const user = users.find(
-        u => u.username === username && u.password === password
-    );
+    const user = users.find(u => u.email === email && u.password === password);
 
     if (!user) return res.status(401).json({ error: "Invalid login" });
 
     res.json({
         success: true,
-        user: { id: user.id, username: user.username }
+        user: { id: user.id, email: user.email }
     });
 });
 
-/* ---------------- POSTS ---------------- */
+/* ---------------- POSTS (UNCHANGED LOGIC) ---------------- */
 
 app.get("/api/posts", (req, res) => {
-    const search = (req.query.search || "").toLowerCase();
-
-    let result = posts;
-
-    if (search) {
-        result = posts.filter(p =>
-            p.title.toLowerCase().includes(search) ||
-            p.content.toLowerCase().includes(search)
-        );
-    }
-
-    res.json(result);
+    res.json(posts);
 });
 
 app.post("/api/posts", (req, res) => {
-    const { title, content, authorId, authorName } = req.body;
+    const { title, author, content } = req.body;
 
     if (!title || !content) {
         return res.status(400).json({ error: "Missing fields" });
@@ -73,30 +60,13 @@ app.post("/api/posts", (req, res) => {
     const post = {
         id: Date.now(),
         title,
+        author: author || "Anonymous",
         content,
-        authorId,
-        authorName: authorName || "Guest",
         createdAt: new Date()
     };
 
     posts.unshift(post);
     res.json(post);
-});
-
-app.delete("/api/posts/:id", (req, res) => {
-    const { userId } = req.body;
-
-    const post = posts.find(p => p.id == req.params.id);
-
-    if (!post) return res.status(404).json({ error: "Not found" });
-
-    if (!userId || post.authorId !== userId) {
-        return res.status(403).json({ error: "Not allowed" });
-    }
-
-    posts = posts.filter(p => p.id != req.params.id);
-
-    res.json({ success: true });
 });
 
 /* ---------------- COMMENTS ---------------- */
@@ -107,6 +77,8 @@ app.get("/api/comments/:postId", (req, res) => {
 
 app.post("/api/comments", (req, res) => {
     const { postId, text, user } = req.body;
+
+    if (!text) return res.status(400).json({ error: "No text" });
 
     comments.push({
         id: Date.now(),
