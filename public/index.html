@@ -14,9 +14,18 @@ body { margin:0; font-family:Arial; background:#111; color:white; }
     background:#0b0b0b;
 }
 
-button { background:#333; color:white; border:none; padding:6px; cursor:pointer; }
+button {
+    background:#333;
+    color:white;
+    border:none;
+    padding:6px 10px;
+    cursor:pointer;
+}
 
-.container { width:80%; margin:auto; }
+.container {
+    width:80%;
+    margin:auto;
+}
 
 input, textarea {
     width:100%;
@@ -36,11 +45,11 @@ input, textarea {
 .modal, .panel {
     display:none;
     position:fixed;
+    top:0;
+    left:0;
     width:100%;
     height:100%;
     background:black;
-    top:0;
-    left:0;
     padding:20px;
     overflow:auto;
 }
@@ -52,7 +61,7 @@ input, textarea {
 <div class="topbar">
     <h2>Larp Bin</h2>
     <div>
-        <button onclick="loginModal.style.display='block'">Login</button>
+        <button onclick="openLogin()">Login / Sign Up</button>
         <button onclick="openPanel()">Panel</button>
     </div>
 </div>
@@ -62,8 +71,9 @@ input, textarea {
 <h2>POSTS</h2>
 
 <input id="title" placeholder="title">
-<input id="author" placeholder="author">
-<textarea id="content"></textarea>
+<input id="author" placeholder="display name">
+<textarea id="content" placeholder="write post..."></textarea>
+
 <button onclick="createPost()">Post</button>
 
 <div id="posts"></div>
@@ -72,11 +82,23 @@ input, textarea {
 
 <!-- LOGIN -->
 <div id="loginModal" class="modal">
-    <h2>Login</h2>
+    <h2>Login / Sign Up</h2>
+
+    <label>Email</label>
     <input id="email">
+
+    <label>Username</label>
     <input id="username">
+
+    <label>Password</label>
     <input id="password" type="password">
+
     <button onclick="login()">Login</button>
+    <button onclick="register()">Sign Up</button>
+
+    <p id="msg"></p>
+
+    <button onclick="loginModal.style.display='none'">Close</button>
 </div>
 
 <!-- PANEL -->
@@ -88,28 +110,72 @@ input, textarea {
 
 <script>
 
-let user=null;
+let user = null;
+
+/* OPEN LOGIN */
+function openLogin(){
+    loginModal.style.display = "block";
+}
+
+/* REGISTER */
+async function register(){
+    const res = await fetch("/api/register",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+            email:email.value,
+            username:username.value,
+            password:password.value
+        })
+    });
+
+    const data = await res.json();
+    msg.innerText = data.success ? "✅ Signed up!" : "❌ Failed";
+}
+
+/* LOGIN */
+async function login(){
+    const res = await fetch("/api/login",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+            email:email.value,
+            username:username.value,
+            password:password.value
+        })
+    });
+
+    const data = await res.json();
+
+    if(data.error){
+        msg.innerText = "❌ Login failed";
+        return;
+    }
+
+    user = data.user;
+    msg.innerText = "✅ Logged in as " + user.username;
+}
 
 /* LOAD POSTS */
 async function loadPosts(){
     const res = await fetch("/api/posts");
     const data = await res.json();
 
-    posts.innerHTML="";
+    posts.innerHTML = "";
 
     data.forEach(p=>{
-        const div=document.createElement("div");
-        div.className="post";
+        const div = document.createElement("div");
+        div.className = "post";
 
-        div.innerHTML=`
-        <b>${p.title}</b><br>
-        ${p.author} ${p.authorVerified ? "✔️ Verified" : ""}<br>
-        <p>${p.content}</p>
+        div.innerHTML = `
+            <b>${p.title}</b><br>
+            ${p.author} ${p.authorVerified ? "✔️ Verified" : ""}<br><br>
+            ${p.content}
         `;
 
         if(user?.isAdmin){
             div.innerHTML += `
-                <button onclick="deletePost('${p._id}')">Delete</button>
+                <br><button onclick="deletePost('${p._id}')">Delete</button>
             `;
         }
 
@@ -132,42 +198,37 @@ async function createPost(){
     loadPosts();
 }
 
-/* LOGIN */
-async function login(){
-    const res = await fetch("/api/login",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-            email:email.value,
-            username:username.value,
-            password:password.value
-        })
+/* DELETE POST */
+async function deletePost(id){
+    await fetch("/api/admin/post/"+id,{
+        method:"DELETE"
     });
 
-    user = await res.json();
-}
-
-/* DELETE */
-async function deletePost(id){
-    await fetch("/api/admin/post/"+id,{method:"DELETE"});
     loadPosts();
 }
 
 /* PANEL */
 async function openPanel(){
-    if(!user?.isAdmin) return alert("Admin only");
+    if(!user?.isAdmin){
+        alert("Admin only");
+        return;
+    }
 
-    panel.style.display="block";
+    panel.style.display = "block";
 
     const res = await fetch("/api/admin/dashboard");
     const data = await res.json();
 
     panelData.innerHTML = `
-    USERS:<br>
-    ${data.users.map(u=>u.username).join("<br>")}
+        <h3>Users</h3>
+        ${data.users.map(u =>
+            `${u.username} ${u.verified ? "✔️ Verified" : ""}<br>`
+        ).join("")}
 
-    <br><br>POSTS:<br>
-    ${data.posts.map(p=>p.title).join("<br>")}
+        <h3>Posts</h3>
+        ${data.posts.map(p =>
+            `${p.title} - ${p.author}<br>`
+        ).join("")}
     `;
 }
 
